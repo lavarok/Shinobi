@@ -19,7 +19,7 @@ yum install liberation-sans-fonts.noarch
 **Install the Node.js Canvas engine**
 
 ```
-sudo npm install canvas
+sudo npm install canvas@1.6.7
 ```
 
 Copy the config file.

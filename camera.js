@@ -123,10 +123,10 @@ s.getDefinitonFile=function(rule){
     }
     return file
 }
-s.disc=function(){
+s.connectSQL=function(){
     sql = mysql.createConnection(config.db);
-    sql.connect(function(err){if(err){s.systemLog(lang['Error Connecting']+' : DB',err);setTimeout(s.disc, 2000);}});
-    sql.on('error',function(err) {s.systemLog(lang['DB Lost.. Retrying..']);s.systemLog(err);s.disc();return;});
+    sql.connect(function(err){if(err){s.systemLog(lang['Error Connecting']+' : DB',err);setTimeout(s.connectSQL, 2000);}});
+    sql.on('error',function(err) {s.systemLog(lang['DB Lost.. Retrying..']);s.systemLog(err);s.connectSQL();return;});
     sql.on('connect',function() {
         s.sqlQuery = function(query,values,callback){
             if(!values){values=[]}
@@ -151,7 +151,7 @@ s.disc=function(){
         });
     });
 }
-s.disc();
+s.connectSQL();
 //kill any ffmpeg running
 s.ffmpegKill=function(){
     var cmd=''
@@ -214,6 +214,10 @@ s.txWithSubPermissions=function(z,y,permissionChoices){
 //load camera controller vars
 s.nameToTime=function(x){x=x.split('.')[0].split('T'),x[1]=x[1].replace(/-/g,':');x=x.join(' ');return x;}
 s.ratio=function(width,height,ratio){ratio = width / height;return ( Math.abs( ratio - 4 / 3 ) < Math.abs( ratio - 16 / 9 ) ) ? '4:3' : '16:9';}
+s.randomNumber=function(x){
+    if(!x){x=10};
+    return Math.floor((Math.random() * x) + 1);
+};
 s.gid=function(x){
     if(!x){x=10};var t = "";var p = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     for( var i=0; i < x; i++ )
@@ -637,8 +641,9 @@ s.video=function(x,e){
         case'archive':
             if(!e.filename&&e.time){e.filename=s.moment(e.time)}
             if(!e.status){e.status=0}
-            e.save=[e.id,e.ke,s.nameToTime(e.filename)];
-            s.sqlQuery('UPDATE Videos SET status=3 WHERE `mid`=? AND `ke`=? AND `time`=?',e.save,function(err,r){
+            e.details.archived="1"
+            e.save=[JSON.stringify(e.details),e.id,e.ke,s.nameToTime(e.filename)];
+            s.sqlQuery('UPDATE Videos SET details=? WHERE `mid`=? AND `ke`=? AND `time`=?',e.save,function(err,r){
                 s.tx({f:'video_edit',status:3,filename:e.filename+'.'+e.ext,mid:e.mid,ke:e.ke,time:s.nameToTime(e.filename)},'GRP_'+e.ke);
             });
         break;
@@ -728,28 +733,27 @@ s.video=function(x,e){
                                     s.group[e.ke].sizePurging=true
                                     //set queue processor
                                     var finish=function(){
-                                        console.log('checkQueueOne',s.group[e.ke].sizePurgeQueue.length)
+//                                        console.log('checkQueueOne',s.group[e.ke].sizePurgeQueue.length)
                                         //remove value just used from queue
                                         s.group[e.ke].sizePurgeQueue = s.group[e.ke].sizePurgeQueue.splice(1,s.group[e.ke].sizePurgeQueue.length+10)
                                         //do next one
                                         if(s.group[e.ke].sizePurgeQueue.length>0){
                                             checkQueue()
                                         }else{
-                                            console.log('checkQueueFinished',s.group[e.ke].sizePurgeQueue.length)
+//                                            console.log('checkQueueFinished',s.group[e.ke].sizePurgeQueue.length)
                                             s.group[e.ke].sizePurging=false
                                             s.init('diskUsedEmit',e)
                                         }
                                     }
                                     var checkQueue=function(){
-                                        console.log('checkQueue',config.cron.deleteOverMaxOffset)
+//                                        console.log('checkQueue',config.cron.deleteOverMaxOffset)
                                         //get first in queue
                                         var currentPurge = s.group[e.ke].sizePurgeQueue[0]
                                         var deleteVideos = function(){
-                                            console.log(s.group[e.ke].usedSpace>(s.group[e.ke].sizeLimit*config.cron.deleteOverMaxOffset))
+//                                            console.log(s.group[e.ke].usedSpace>(s.group[e.ke].sizeLimit*config.cron.deleteOverMaxOffset))
                                             //run purge command
                                             if(s.group[e.ke].usedSpace>(s.group[e.ke].sizeLimit*config.cron.deleteOverMaxOffset)){
-                                                    console.log('SELECT * FROM Videos WHERE status != 0 AND ke=? ORDER BY `time` ASC LIMIT 2')
-                                                    s.sqlQuery('SELECT * FROM Videos WHERE status != 0 AND ke=? ORDER BY `time` ASC LIMIT 2',[e.ke],function(err,evs){
+                                                    s.sqlQuery('SELECT * FROM Videos WHERE status != 0 AND details NOT LIKE \'%"archived":"1"%\' AND ke=? ORDER BY `time` ASC LIMIT 2',[e.ke],function(err,evs){
                                                         k.del=[];k.ar=[e.ke];
                                                         evs.forEach(function(ev){
                                                             ev.dir=s.video('getDir',ev)+s.moment(ev.time)+'.'+ev.ext;
@@ -1001,7 +1005,7 @@ s.ffmpeg=function(e,x){
         if(e.details.hwaccel_device&&e.details.hwaccel_device!==''){
             switch(e.details.hwaccel){
                 case'vaapi':
-                    x.hwaccel+=' -vaapi_device '+e.details.hwaccel_device+' -hwaccel_output_format vaapi';
+                    x.hwaccel+=' -vaapi_device '+e.details.hwaccel_device;
                 break;
                 default:
                     x.hwaccel+=' -hwaccel_device '+e.details.hwaccel_device;
@@ -1080,7 +1084,7 @@ s.ffmpeg=function(e,x){
     if(e.details.rawh264==='1'){
         if(e.details.rawh264_vcodec&&e.details.rawh264_vcodec!==''){x.rawh264_vcodec=' -c:v '+e.details.rawh264_vcodec}else{x.rawh264_vcodec=' -c:v copy'}
         if(e.details.rawh264_acodec==='no'){
-            
+            x.rawh264_acodec=''
         }else{
             if(e.details.rawh264_acodec&&e.details.rawh264_acodec!==''){x.rawh264_acodec=' -c:a '+e.details.rawh264_acodec}else{x.rawh264_acodec=' -c:a aac'}
         }
@@ -1829,7 +1833,7 @@ s.camera=function(x,e,cn,tx){
                 }).end();
             }
             //mailer
-            if(config.mail&&s.group[d.ke].mon[d.id].detector_mail&&d.mon.details.detector_mail==='1'){
+            if(config.mail&&!s.group[d.ke].mon[d.id].detector_mail&&d.mon.details.detector_mail==='1'){
                 s.sqlQuery('SELECT mail FROM Users WHERE ke=? AND details NOT LIKE ?',[d.ke,'%"sub"%'],function(err,r){
                     r=r[0];
                     if(!d.mon.details.detector_mail_timeout||d.mon.details.detector_mail_timeout===''){
@@ -1843,7 +1847,7 @@ s.camera=function(x,e,cn,tx){
                         clearTimeout(s.group[d.ke].mon[d.id].detector_mail);
                         delete(s.group[d.ke].mon[d.id].detector_mail);
                     },d.mon.details.detector_mail_timeout);
-                    d.frame_filename='Motion_'+(d.name.replace(/[^\w\s]/gi, ''))+'_'+d.id+'_'+d.ke+'_'+s.moment()+'.jpg';
+                    d.frame_filename='Motion_'+(d.mon.name.replace(/[^\w\s]/gi, ''))+'_'+d.id+'_'+d.ke+'_'+s.moment()+'.jpg';
                     fs.readFile(s.dir.streams+'/'+d.ke+'/'+d.id+'/s.jpg',function(err, frame){
                         d.mailOptions = {
                             from: '"ShinobiCCTV" <no-reply@shinobi.video>', // sender address
@@ -2894,6 +2898,17 @@ app.use(bodyParser.urlencoded({extended: true}));
 app.set('views', __dirname + '/web/pages');
 app.set('view engine','ejs');
 //readme
+app.get('/:auth/logout/:ke/:id', function (req,res){
+    if(s.group[req.params.ke]&&s.group[req.params.ke].users[req.params.auth]){
+        delete(s.api[req.params.auth]);
+        delete(s.group[req.params.ke].users[req.params.auth]);
+        s.sqlQuery("UPDATE Users SET auth=? WHERE auth=? AND ke=? AND uid=?",[s.gid(s.randomNumber()),req.params.auth,req.params.ke,req.params.id])
+        res.end(s.s({ok:true,msg:'You have been logged out, session key is now inactive.'}, null, 3))
+    }else{
+        res.end(s.s({ok:false,msg:'This group key does not exist or this user is not logged in.'}, null, 3))
+    }
+});
+//readme
 app.get('/info', function (req,res){
     res.sendFile(__dirname+'/index.html');
 });
@@ -3435,6 +3450,16 @@ app.get(['/:auth/monitor/:ke','/:auth/monitor/:ke/:id'], function (req,res){
             }
         }
         s.sqlQuery(req.sql,req.ar,function(err,r){
+//            r.forEach(function(v,n){
+//                r[n].subStream={}
+//                var details = JSON.parse(r[n].details)
+//                if(details.rawh264==='1'){
+//                    r[n].subStream.h264 = '/'+req.params.auth+'/h264/'+v.ke+'/'+v.mid+'/1'
+//                }
+//                if(details.snap==='1'){
+//                    r[n].subStream.jpeg = '/'+req.params.auth+'/jpeg/'+v.ke+'/'+v.mid+'/s.jpg'
+//                }
+//            })
             if(r.length===1){r=r[0];}
             res.end(s.s(r, null, 3));
         })
@@ -3452,6 +3477,10 @@ app.get(['/:auth/videos/:ke','/:auth/videos/:ke/:id'], function (req,res){
         }
         req.sql='SELECT * FROM Videos WHERE ke=?';req.ar=[req.params.ke];
         req.count_sql='SELECT COUNT(*) FROM Videos WHERE ke=?';req.count_ar=[req.params.ke];
+        if(req.query.archived=='1'){
+            req.sql+=' AND details LIKE \'%"archived":"1"\''
+            req.count_sql+=' AND details LIKE \'%"archived":"1"\''
+        }
         if(!req.params.id){
             if(user.details.sub&&user.details.monitors&&user.details.allmonitors!=='1'){
                 try{user.details.monitors=JSON.parse(user.details.monitors);}catch(er){}
@@ -3990,7 +4019,7 @@ app.get('/:auth/motion/:ke/:id', function (req,res){
             try{
                 var d={id:req.params.id,ke:req.params.ke,details:JSON.parse(req.query.data)};
             }catch(err){
-                res.end('Data Broken');
+                res.end('Data Broken',err);
                 return;
             }
         }else{
@@ -4065,7 +4094,7 @@ app.all(['/streamIn/:ke/:id','/streamIn/:ke/:id/:feed'], function (req, res) {
             s.group[req.params.ke].mon[req.params.id].streamIn[req.params.feed].emit('data',buffer)
         });
         req.on('end',function(){
-            console.log('streamIn closed',req.params);
+//            console.log('streamIn closed',req.params);
         });
     }else{
         res.end('Local connection is only allowed.')

@@ -1,5 +1,8 @@
+# We moved to GitLab!
+## https://gitlab.com/Shinobi-Systems/Shinobi
+
 # Shinobi Pro 
-### (Creative Commons v4.0)
+### (Shinobi Open Source Software)
 
 Shinobi is the Open Source CCTV Solution written in Node.JS. Designed with multiple account system, Streams by WebSocket, and Save to WebM. Shinobi can record IP Cameras and Local Cameras.
 
@@ -54,7 +57,7 @@ Please be considerate of developer efforts. If you have simple questions, like "
 
 ## Making Suggestions or Feature Requests
 
-You can post suggestions in the Discord #suggestions channel. Please do not treat this channel like a "demands" window. Developer efforts are limited. Much more than many alternatives.
+You can post suggestions on the Forum in the Suggestions category. Please do not treat this channel like a "demands" window. Developer efforts are limited. Much more than many alternatives.
 
 when you have a suggestion please try and make the changes yourself then post a pull request to the `dev` branch. Then we can decide if it's a good change for Shinobi. If you don't know how to go about it and want to have me put it higher on my priority list you can order a support package :) Pretty Ferengi of me... but until we live in a world without money please support Shinobi :) Cheers!
 
@@ -87,19 +90,20 @@ http://shinobi.video/why
 
 > FOR DOCKER USERS : Docker is not officially supported and is not recommended. The kitematic method is provided for those who wish to quickly test Shinobi. The Docker files included in the master and dev branches are maintained by the community. If you would like support with Docker please find a community member who maintains the Docker files or please refer to Docker's forum.
 
-#### Fast Install
+#### Fast Install (The Ninja Way)
 
-Currently Fast Install is supported on the following :
+1. Become `root` to use the installer and run Shinobi. Use one of the following to do so.
 
-- Ubuntu / Debian
-- CentOS / RHEL / Fedora
+    - Ubuntu 17.04, 17.10
+        - `sudo su`
+    - CentOS 7
+        - `su`
+    - MacOS 10.7(+)
+        - `su`
+2. Download and run the installer.
 
 ```
-mkdir Shinobi
-cd Shinobi
-sudo npm install shinobi
-mv node_modules/shinobi/* .
-sudo npm start
+bash <(curl -s https://gitlab.com/Shinobi-Systems/Shinobi-Installer/raw/master/shinobi-install.sh)
 ```
 
 #### Elaborate Installs
